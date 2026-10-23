@@ -346,6 +346,21 @@ label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 
 .login-note { color: var(--muted); font-size: 0.78rem; margin-top: 18px; line-height: 1.5; }
 .remember { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; margin-top: 10px; text-align: left; }
 .remember input { width: auto; }
+.password-wrap { position: relative; }
+.password-wrap input { padding-right: 44px; }
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--muted);
+}
+.password-toggle:hover { opacity: 1; filter: brightness(1.2); }
 .login-links { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .linkbtn { background: none; border: none; color: var(--accent); font-size: 0.85rem; padding: 4px; font-weight: 600; }
 .linkbtn:hover { text-decoration: underline; }

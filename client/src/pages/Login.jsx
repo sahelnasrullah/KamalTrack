@@ -7,6 +7,7 @@ export default function Login() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [remember, setRemember] = useState(true);
   const [resetToken, setResetToken] = useState('');
@@ -97,12 +98,24 @@ export default function Login() {
           {mode !== 'reset-request' && (
             <div className="field">
               <label>{mode === 'reset-confirm' ? 'New password' : 'Password'}</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === 'signup' ? 'at least 8 characters' : '••••••••'}
-              />
+              <div className="password-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'signup' ? 'at least 8 characters' : '••••••••'}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  tabIndex={-1}
+                >
+                  {showPassword ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
           )}
 
