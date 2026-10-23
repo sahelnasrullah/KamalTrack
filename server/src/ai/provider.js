@@ -22,12 +22,13 @@ export class AIProvider {
  * Shared by every provider so prompts stay consistent.
  */
 export function buildReflectionPrompt(context) {
-  const { areas, trackers, entries, items } = context;
+  const { areas, trackers, entries, items, habits = [], upcomingEvents = [], recentEvents = [] } = context;
 
   const lines = [];
   lines.push(
     'You are a thoughtful life-planning coach. Based on the data below, write a short weekly reflection.',
     'Be concrete, encouraging, and specific. Reference actual numbers and trends where possible.',
+    'Comment on habit consistency (especially core habits) and acknowledge what is coming up on the schedule.',
     '',
     'Respond as JSON with this exact shape:',
     '{ "summary": string, "highlights": string[], "suggestions": string[] }',
@@ -58,6 +59,33 @@ export function buildReflectionPrompt(context) {
     }
     if (areaTrackers.length === 0 && areaItems.length === 0) {
       lines.push('  (nothing tracked yet)');
+    }
+  }
+
+  // Daily habits
+  if (habits.length) {
+    lines.push('\nDAILY HABITS (last 7 days):');
+    for (const h of habits) {
+      const tag = h.is_core ? ' [core]' : '';
+      if (h.marked === 0) {
+        lines.push(`  - ${h.name}${tag}: not logged this week`);
+      } else {
+        lines.push(`  - ${h.name}${tag}: done ${h.done}/${h.marked} days (${h.rate}%)`);
+      }
+    }
+  }
+
+  // Schedule
+  if (recentEvents.length) {
+    lines.push('\nSCHEDULE — recent (last 7 days):');
+    for (const e of recentEvents) {
+      lines.push(`  - ${e.date}${e.start_time ? ` ${e.start_time}` : ''}: ${e.title}`);
+    }
+  }
+  if (upcomingEvents.length) {
+    lines.push('\nSCHEDULE — upcoming (next 7 days):');
+    for (const e of upcomingEvents) {
+      lines.push(`  - ${e.date}${e.start_time ? ` ${e.start_time}` : ''}: ${e.title}`);
     }
   }
 

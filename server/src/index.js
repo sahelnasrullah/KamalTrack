@@ -24,6 +24,12 @@ function daysAgoISO(n) {
   return d.toISOString().slice(0, 10);
 }
 
+function daysAheadISO(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 // wrap async route handlers so thrown errors hit the error middleware
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -582,6 +588,34 @@ app.post(
       .all(weekStart);
     const items = db.prepare('SELECT * FROM items').all();
 
+    // Habits: per-habit done/marked over the last 7 days, with core flag.
+    const habitRows = db
+      .prepare('SELECT * FROM habits WHERE archived = 0 ORDER BY is_core DESC, sort_order, id')
+      .all();
+    const habitLogs = db
+      .prepare('SELECT habit_id, date, value FROM habit_logs WHERE date >= ? AND date <= ?')
+      .all(weekStart, weekEnd);
+    const habits = habitRows.map((h) => {
+      const logs = habitLogs.filter((l) => l.habit_id === h.id);
+      const marked = logs.length;
+      const done = logs.filter((l) => l.value === 1).length;
+      return {
+        name: h.name,
+        is_core: !!h.is_core,
+        done,
+        marked,
+        rate: marked ? Math.round((done / marked) * 100) : null,
+      };
+    });
+
+    // Schedule: recent (last 7 days) and upcoming (next 7 days) events.
+    const upcomingEvents = db
+      .prepare('SELECT title, date, start_time FROM events WHERE date >= ? AND date <= ? ORDER BY date, start_time')
+      .all(weekEnd, daysAheadISO(7));
+    const recentEvents = db
+      .prepare('SELECT title, date, start_time FROM events WHERE date >= ? AND date < ? ORDER BY date, start_time')
+      .all(weekStart, weekEnd);
+
     const provider = getAIProvider();
     const result = await provider.reflect({
       weekStart,
@@ -590,6 +624,9 @@ app.post(
       trackers,
       entries,
       items,
+      habits,
+      upcomingEvents,
+      recentEvents,
     });
     res.json(result);
   }),

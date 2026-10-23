@@ -6,7 +6,7 @@ import { AIProvider } from './provider.js';
  */
 export class MockProvider extends AIProvider {
   async reflect(context) {
-    const { areas, trackers, entries, items } = context;
+    const { areas, trackers, entries, items, habits = [], upcomingEvents = [] } = context;
 
     const highlights = [];
     const suggestions = [];
@@ -46,6 +46,43 @@ export class MockProvider extends AIProvider {
       suggestions.push(`Take one small step on your ${g.type}: "${g.content}".`);
     }
 
+    // Habits: summarize consistency, call out best and weakest (esp. core).
+    const loggedHabits = habits.filter((h) => h.marked > 0);
+    let habitSentence = '';
+    if (habits.length) {
+      if (loggedHabits.length === 0) {
+        habitSentence = `You have ${habits.length} habit${habits.length === 1 ? '' : 's'} set up but logged none this week. `;
+        suggestions.push('Log your daily habits each day — even a quick Yes/No keeps the streak honest.');
+      } else {
+        const avg = Math.round(
+          loggedHabits.reduce((s, h) => s + h.rate, 0) / loggedHabits.length,
+        );
+        habitSentence = `Across ${loggedHabits.length} tracked habit${loggedHabits.length === 1 ? '' : 's'}, you averaged ${avg}% completion. `;
+
+        const best = [...loggedHabits].sort((a, b) => b.rate - a.rate)[0];
+        if (best && best.rate >= 80) {
+          highlights.push(`Strong consistency on "${best.name}" — ${best.done}/${best.marked} days (${best.rate}%).`);
+        }
+        // Weakest core habit gets a targeted nudge.
+        const weakCore = loggedHabits
+          .filter((h) => h.is_core && h.rate < 60)
+          .sort((a, b) => a.rate - b.rate)[0];
+        if (weakCore) {
+          suggestions.push(
+            `Your core habit "${weakCore.name}" slipped to ${weakCore.rate}% — protect it first next week (never two misses in a row).`,
+          );
+        }
+      }
+    }
+
+    // Upcoming schedule: acknowledge what's coming.
+    let scheduleSentence = '';
+    if (upcomingEvents.length) {
+      const next = upcomingEvents[0];
+      scheduleSentence = `You have ${upcomingEvents.length} event${upcomingEvents.length === 1 ? '' : 's'} coming up in the next 7 days — next is "${next.title}" on ${next.date}${next.start_time ? ` at ${next.start_time}` : ''}. `;
+      suggestions.push(`Plan around your schedule: block time for "${next.title}" on ${next.date}.`);
+    }
+
     if (suggestions.length === 0) {
       suggestions.push('Everything looks logged — pick one tracker and set a target for next week.');
     }
@@ -58,8 +95,12 @@ export class MockProvider extends AIProvider {
       `${areaCount === 1 ? 'area' : 'areas'}. ` +
       (neglected.length
         ? `${neglected.length} tracker${neglected.length === 1 ? '' : 's'} had no entries. `
-        : 'You stayed on top of all your trackers — nice consistency. ') +
-      (highlights.length ? 'See the highlights for how your numbers trended.' : '');
+        : trackers.length
+          ? 'You stayed on top of all your trackers — nice consistency. '
+          : '') +
+      habitSentence +
+      scheduleSentence +
+      (highlights.length ? 'See the highlights for how things trended.' : '');
 
     return {
       summary,
