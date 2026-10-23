@@ -52,9 +52,29 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS habits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    archived   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- One log per habit per day. value: 1 = Yes, 0 = No. Absence of a row = untouched.
+  CREATE TABLE IF NOT EXISTS habit_logs (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    habit_id  INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    date      TEXT NOT NULL,
+    value     INTEGER NOT NULL,     -- 1 = Yes, 0 = No
+    UNIQUE(habit_id, date)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_trackers_area ON trackers(area_id);
   CREATE INDEX IF NOT EXISTS idx_entries_tracker ON entries(tracker_id);
   CREATE INDEX IF NOT EXISTS idx_items_area ON items(area_id);
+  CREATE INDEX IF NOT EXISTS idx_habit_logs_date ON habit_logs(date);
+  CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs(habit_id);
 `);
 
 // --- lightweight migrations for pre-existing databases ---------------------

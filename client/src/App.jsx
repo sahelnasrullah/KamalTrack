@@ -56,11 +56,16 @@ export default function App() {
         <Link to="/" className="brand">
           Kamal<span>Track</span>
         </Link>
-        {'Notification' in window && Notification.permission !== 'granted' && (
-          <button className="ghost" onClick={enableNotifications}>
-            🔔 Enable reminders
-          </button>
-        )}
+        <div className="nav-actions">
+          <Link to="/habits" className="nav-link">
+            ✅ Daily habits
+          </Link>
+          {'Notification' in window && Notification.permission !== 'granted' && (
+            <button className="ghost" onClick={enableNotifications}>
+              🔔 Enable reminders
+            </button>
+          )}
+        </div>
       </div>
 
       {due.length > 0 && (

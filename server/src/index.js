@@ -294,6 +294,79 @@ app.get('/api/due-today', (req, res) => {
   res.json(due);
 });
 
+// --- habits (daily Yes/No tracker) -----------------------------------------
+
+// List all active habits (ordered).
+app.get('/api/habits', (req, res) => {
+  const habits = db
+    .prepare('SELECT * FROM habits WHERE archived = 0 ORDER BY sort_order, id')
+    .all();
+  res.json(habits);
+});
+
+app.post('/api/habits', (req, res) => {
+  const { name, color } = req.body || {};
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM habits').get().m;
+  const info = db
+    .prepare('INSERT INTO habits (name, color, sort_order) VALUES (?, ?, ?)')
+    .run(name.trim(), color || '#6366f1', maxOrder + 1);
+  res.status(201).json(db.prepare('SELECT * FROM habits WHERE id = ?').get(info.lastInsertRowid));
+});
+
+app.delete('/api/habits/:id', (req, res) => {
+  db.prepare('DELETE FROM habits WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
+// Get a single day: every active habit with its value for that date
+// (value = 1 Yes, 0 No, or null if untouched) plus the day's completion %.
+app.get('/api/habits/day/:date', (req, res) => {
+  const date = req.params.date;
+  const rows = db
+    .prepare(
+      `SELECT h.id, h.name, h.color, h.sort_order, l.value AS value
+       FROM habits h
+       LEFT JOIN habit_logs l ON l.habit_id = h.id AND l.date = ?
+       WHERE h.archived = 0
+       ORDER BY h.sort_order, h.id`,
+    )
+    .all(date);
+
+  const marked = rows.filter((r) => r.value !== null);
+  const yes = marked.filter((r) => r.value === 1).length;
+  const percent = marked.length ? Math.round((yes / marked.length) * 100) : 0;
+
+  res.json({
+    date,
+    habits: rows,
+    stats: { marked: marked.length, yes, no: marked.length - yes, percent },
+  });
+});
+
+// Set (or clear) a habit's value for a given date.
+// body: { value: 1 | 0 | null }  — null clears the day (back to untouched).
+app.put('/api/habits/:id/log/:date', (req, res) => {
+  const habit = db.prepare('SELECT id FROM habits WHERE id = ?').get(req.params.id);
+  if (!habit) return res.status(404).json({ error: 'habit not found' });
+
+  const { value } = req.body || {};
+  if (value === null || value === undefined) {
+    db.prepare('DELETE FROM habit_logs WHERE habit_id = ? AND date = ?').run(
+      req.params.id,
+      req.params.date,
+    );
+    return res.json({ habit_id: Number(req.params.id), date: req.params.date, value: null });
+  }
+
+  const v = Number(value) === 1 ? 1 : 0;
+  db.prepare(
+    `INSERT INTO habit_logs (habit_id, date, value) VALUES (?, ?, ?)
+     ON CONFLICT(habit_id, date) DO UPDATE SET value = excluded.value`,
+  ).run(req.params.id, req.params.date, v);
+  res.json({ habit_id: Number(req.params.id), date: req.params.date, value: v });
+});
+
 // --- AI weekly reflection --------------------------------------------------
 
 app.post(

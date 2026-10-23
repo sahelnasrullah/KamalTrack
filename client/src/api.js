@@ -57,4 +57,12 @@ export const api = {
   // reminders + AI
   dueToday: () => req('/due-today'),
   reflect: () => req('/ai/reflect', { method: 'POST' }),
+
+  // habits (daily Yes/No tracker)
+  getHabits: () => req('/habits'),
+  createHabit: (data) => req('/habits', { method: 'POST', body: JSON.stringify(data) }),
+  deleteHabit: (id) => req(`/habits/${id}`, { method: 'DELETE' }),
+  getHabitDay: (date) => req(`/habits/day/${date}`),
+  setHabitLog: (id, date, value) =>
+    req(`/habits/${id}/log/${date}`, { method: 'PUT', body: JSON.stringify({ value }) }),
 };
