@@ -61,8 +61,10 @@ export const api = {
   // habits (daily Yes/No tracker)
   getHabits: () => req('/habits'),
   createHabit: (data) => req('/habits', { method: 'POST', body: JSON.stringify(data) }),
+  updateHabit: (id, data) => req(`/habits/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteHabit: (id) => req(`/habits/${id}`, { method: 'DELETE' }),
   getHabitDay: (date) => req(`/habits/day/${date}`),
+  getHabitRange: (from, to) => req(`/habits/range?from=${from}&to=${to}`),
   setHabitLog: (id, date, value) =>
     req(`/habits/${id}/log/${date}`, { method: 'PUT', body: JSON.stringify({ value }) }),
 
@@ -72,4 +74,12 @@ export const api = {
   createEvent: (data) => req('/events', { method: 'POST', body: JSON.stringify(data) }),
   updateEvent: (id, data) => req(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteEvent: (id) => req(`/events/${id}`, { method: 'DELETE' }),
+
+  // import an .ics file (raw text body)
+  importICS: (text) =>
+    req('/events/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/calendar' },
+      body: text,
+    }),
 };

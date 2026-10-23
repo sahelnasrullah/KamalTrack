@@ -38,6 +38,7 @@ export default function Schedule() {
   const [events, setEvents] = useState([]);
   const [modal, setModal] = useState(null); // { event } for edit, { date, start_time } for new
   const [error, setError] = useState('');
+  const [importMsg, setImportMsg] = useState('');
 
   // Compute the visible date range for the current view (to query the API).
   const range = useMemo(() => {
@@ -65,6 +66,27 @@ export default function Schedule() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    setError('');
+    setImportMsg('Importing…');
+    try {
+      const text = await file.text();
+      const { imported, skipped } = await api.importICS(text);
+      setImportMsg(
+        `Imported ${imported} event${imported === 1 ? '' : 's'}` +
+          (skipped ? ` · skipped ${skipped} recurring` : ''),
+      );
+      await load();
+      setTimeout(() => setImportMsg(''), 6000);
+    } catch (err) {
+      setImportMsg('');
+      setError(`Import failed: ${err.message}`);
+    }
+  };
 
   const eventsOn = (dayISO) =>
     events
@@ -121,9 +143,19 @@ export default function Schedule() {
             ))}
           </div>
           <button onClick={() => setModal({ date: todayISO() })}>+ Event</button>
+          <label className="ghost import-btn">
+            ⬆ Import .ics
+            <input
+              type="file"
+              accept=".ics,text/calendar"
+              onChange={handleImport}
+              style={{ display: 'none' }}
+            />
+          </label>
         </div>
       </div>
 
+      {importMsg && <div className="import-msg">{importMsg}</div>}
       {error && <div className="error">{error}</div>}
 
       {view === 'month' && (

@@ -56,6 +56,7 @@ db.exec(`
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL,
     color      TEXT NOT NULL DEFAULT '#6366f1',
+    is_core    INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     archived   INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -106,5 +107,10 @@ if (!itemCols.includes('target_direction')) {
 
 // Index on tracker_id must come after the column exists (migration above).
 db.exec(`CREATE INDEX IF NOT EXISTS idx_items_tracker ON items(tracker_id)`);
+
+const habitCols = db.prepare(`PRAGMA table_info(habits)`).all().map((c) => c.name);
+if (habitCols.length && !habitCols.includes('is_core')) {
+  db.exec(`ALTER TABLE habits ADD COLUMN is_core INTEGER NOT NULL DEFAULT 0`);
+}
 
 export default db;

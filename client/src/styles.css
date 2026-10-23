@@ -520,3 +520,58 @@ label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 
   .cal-title { min-width: auto; width: 100%; order: -1; }
   .cal-views { margin-left: 0; }
 }
+
+/* ---------- Habits: top bar, core, history grid ---------- */
+.habit-top {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+}
+.habit-group-label {
+  font-size: 0.78rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin: 14px 0 8px;
+}
+.core-star {
+  background: transparent; border: none; padding: 0 4px;
+  font-size: 1.15rem; color: #565c69; flex: 0 0 auto;
+}
+.core-star.on { color: #f59e0b; }
+.core-check {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 0.85rem; flex: 0 0 auto;
+}
+.core-check input { width: auto; }
+
+/* Import button (styled file label) */
+.import-btn { cursor: pointer; display: inline-flex; align-items: center; }
+.import-msg {
+  background: rgba(16,185,129,0.12); border: 1px solid var(--accent-2);
+  color: var(--text); border-radius: 8px; padding: 8px 12px;
+  margin-bottom: 12px; font-size: 0.88rem;
+}
+
+/* Excel-style history grid */
+.grid-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.habit-grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+.habit-grid th, .habit-grid td { border: 1px solid var(--border); }
+.habit-grid thead th { background: var(--panel-2); position: sticky; top: 0; }
+.gh-name {
+  text-align: left; padding: 8px 10px; min-width: 150px;
+  position: sticky; left: 0; z-index: 2; background: var(--panel-2);
+}
+.gh-day { width: 30px; padding: 4px 0; vertical-align: middle; }
+.gh-day.today { background: rgba(99,102,241,0.25); }
+.gh-dow { display: block; color: var(--muted); font-size: 0.62rem; }
+.gh-num { display: block; font-weight: 700; font-size: 0.72rem; }
+.gh-sum { width: 48px; color: var(--muted); }
+
+.gc-name {
+  text-align: left; padding: 6px 10px; white-space: nowrap;
+  position: sticky; left: 0; background: var(--panel); z-index: 1;
+}
+.core-dot { color: #f59e0b; margin-right: 5px; }
+.gc-cell { width: 30px; height: 30px; padding: 0; }
+.gc-cell.yes { background: #10b981; }
+.gc-cell.no { background: #ef4444; }
+.gc-cell.empty { background: transparent; }
+.gc-sum { text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }

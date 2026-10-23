@@ -7,6 +7,8 @@ import { getAIProvider } from './ai/index.js';
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Accept raw .ics uploads (text/calendar or text/plain) up to 5mb.
+app.use(express.text({ type: ['text/calendar', 'text/plain'], limit: '5mb' }));
 
 const PORT = process.env.PORT || 3001;
 
@@ -296,22 +298,36 @@ app.get('/api/due-today', (req, res) => {
 
 // --- habits (daily Yes/No tracker) -----------------------------------------
 
-// List all active habits (ordered).
+// List all active habits (core first, then by order).
 app.get('/api/habits', (req, res) => {
   const habits = db
-    .prepare('SELECT * FROM habits WHERE archived = 0 ORDER BY sort_order, id')
+    .prepare('SELECT * FROM habits WHERE archived = 0 ORDER BY is_core DESC, sort_order, id')
     .all();
   res.json(habits);
 });
 
 app.post('/api/habits', (req, res) => {
-  const { name, color } = req.body || {};
+  const { name, color, is_core } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
   const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM habits').get().m;
   const info = db
-    .prepare('INSERT INTO habits (name, color, sort_order) VALUES (?, ?, ?)')
-    .run(name.trim(), color || '#6366f1', maxOrder + 1);
+    .prepare('INSERT INTO habits (name, color, is_core, sort_order) VALUES (?, ?, ?, ?)')
+    .run(name.trim(), color || '#6366f1', is_core ? 1 : 0, maxOrder + 1);
   res.status(201).json(db.prepare('SELECT * FROM habits WHERE id = ?').get(info.lastInsertRowid));
+});
+
+// Toggle/update a habit (currently: core flag, name, color).
+app.patch('/api/habits/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM habits WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'habit not found' });
+  const { name, color, is_core } = req.body || {};
+  db.prepare('UPDATE habits SET name = ?, color = ?, is_core = ? WHERE id = ?').run(
+    name ?? existing.name,
+    color ?? existing.color,
+    is_core === undefined ? existing.is_core : is_core ? 1 : 0,
+    req.params.id,
+  );
+  res.json(db.prepare('SELECT * FROM habits WHERE id = ?').get(req.params.id));
 });
 
 app.delete('/api/habits/:id', (req, res) => {
@@ -325,11 +341,11 @@ app.get('/api/habits/day/:date', (req, res) => {
   const date = req.params.date;
   const rows = db
     .prepare(
-      `SELECT h.id, h.name, h.color, h.sort_order, l.value AS value
+      `SELECT h.id, h.name, h.color, h.is_core, h.sort_order, l.value AS value
        FROM habits h
        LEFT JOIN habit_logs l ON l.habit_id = h.id AND l.date = ?
        WHERE h.archived = 0
-       ORDER BY h.sort_order, h.id`,
+       ORDER BY h.is_core DESC, h.sort_order, h.id`,
     )
     .all(date);
 
@@ -425,6 +441,130 @@ app.patch('/api/events/:id', (req, res) => {
 app.delete('/api/events/:id', (req, res) => {
   db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
   res.status(204).end();
+});
+
+// --- iCal (.ics) import ----------------------------------------------------
+
+// Unfold RFC 5545 folded lines (continuation lines start with space or tab).
+function unfoldICS(text) {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\n[ \t]/g, '');
+}
+
+// Parse "YYYYMMDD" (all-day) or "YYYYMMDDTHHMMSS[Z]" into {date, time|null}.
+function parseICSDate(raw) {
+  if (!raw) return null;
+  const v = raw.trim();
+  const dateOnly = /^(\d{4})(\d{2})(\d{2})$/.exec(v);
+  if (dateOnly) {
+    return { date: `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}`, time: null };
+  }
+  const dt = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/.exec(v);
+  if (dt) {
+    return {
+      date: `${dt[1]}-${dt[2]}-${dt[3]}`,
+      time: `${dt[4]}:${dt[5]}`,
+    };
+  }
+  return null;
+}
+
+// Minimal, dependency-free VEVENT extractor. Handles single timed and all-day
+// events. RRULE (recurring) events are detected and skipped (counted), since
+// correct recurrence expansion is out of scope for this importer.
+function parseICS(text) {
+  const lines = unfoldICS(text).split('\n');
+  const events = [];
+  let skippedRecurring = 0;
+  let cur = null;
+
+  for (const line of lines) {
+    if (line === 'BEGIN:VEVENT') {
+      cur = {};
+      continue;
+    }
+    if (line === 'END:VEVENT') {
+      if (cur) {
+        if (cur._hasRRule) {
+          skippedRecurring += 1;
+        } else if (cur.title && cur.start) {
+          events.push(cur);
+        }
+      }
+      cur = null;
+      continue;
+    }
+    if (!cur) continue;
+
+    const idx = line.indexOf(':');
+    if (idx === -1) continue;
+    const left = line.slice(0, idx); // may include ;params
+    const value = line.slice(idx + 1);
+    const name = left.split(';')[0].toUpperCase();
+
+    if (name === 'SUMMARY') {
+      cur.title = value.replace(/\\,/g, ',').replace(/\\n/gi, ' ').replace(/\\;/g, ';').trim();
+    } else if (name === 'DTSTART') {
+      cur.start = parseICSDate(value);
+    } else if (name === 'DTEND') {
+      cur.end = parseICSDate(value);
+    } else if (name === 'DESCRIPTION') {
+      cur.notes = value.replace(/\\,/g, ',').replace(/\\n/gi, ' ').replace(/\\;/g, ';').trim();
+    } else if (name === 'RRULE') {
+      cur._hasRRule = true;
+    }
+  }
+
+  return { events, skippedRecurring };
+}
+
+app.post('/api/events/import', (req, res) => {
+  const text = typeof req.body === 'string' ? req.body : '';
+  if (!text || !text.includes('BEGIN:VCALENDAR')) {
+    return res.status(400).json({ error: 'Body must be a valid .ics (iCalendar) file' });
+  }
+
+  const { events, skippedRecurring } = parseICS(text);
+
+  const insert = db.prepare(
+    `INSERT INTO events (title, date, start_time, end_time, color, notes)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  const tx = db.transaction((rows) => {
+    let n = 0;
+    for (const ev of rows) {
+      insert.run(
+        ev.title || 'Untitled',
+        ev.start.date,
+        ev.start.time, // null for all-day
+        ev.end ? ev.end.time : null,
+        '#06b6d4', // distinct color for imported events
+        ev.notes || '',
+      );
+      n += 1;
+    }
+    return n;
+  });
+
+  const imported = tx(events);
+  res.json({ imported, skipped: skippedRecurring });
+});
+
+// --- habits range (for the Excel-style history grid) ----------------------
+
+// All habit logs between two dates (inclusive), for building the grid.
+app.get('/api/habits/range', (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+  const habits = db
+    .prepare('SELECT * FROM habits WHERE archived = 0 ORDER BY is_core DESC, sort_order, id')
+    .all();
+  const logs = db
+    .prepare('SELECT habit_id, date, value FROM habit_logs WHERE date >= ? AND date <= ?')
+    .all(from, to);
+  res.json({ from, to, habits, logs });
 });
 
 // --- AI weekly reflection --------------------------------------------------
