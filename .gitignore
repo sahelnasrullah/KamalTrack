@@ -17,6 +17,10 @@ build/
 *.sqlite
 *.sqlite3
 *.db
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
 server/data/*.sqlite
 server/data/*.db
 
