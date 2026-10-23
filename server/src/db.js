@@ -70,11 +70,24 @@ db.exec(`
     UNIQUE(habit_id, date)
   );
 
+  -- Calendar events (Google-Calendar style)
+  CREATE TABLE IF NOT EXISTS events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT NOT NULL,
+    date       TEXT NOT NULL,            -- YYYY-MM-DD
+    start_time TEXT,                      -- HH:MM (null = all-day)
+    end_time   TEXT,                      -- HH:MM
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    notes      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_trackers_area ON trackers(area_id);
   CREATE INDEX IF NOT EXISTS idx_entries_tracker ON entries(tracker_id);
   CREATE INDEX IF NOT EXISTS idx_items_area ON items(area_id);
   CREATE INDEX IF NOT EXISTS idx_habit_logs_date ON habit_logs(date);
   CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs(habit_id);
+  CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
 `);
 
 // --- lightweight migrations for pre-existing databases ---------------------

@@ -367,6 +367,66 @@ app.put('/api/habits/:id/log/:date', (req, res) => {
   res.json({ habit_id: Number(req.params.id), date: req.params.date, value: v });
 });
 
+// --- calendar events -------------------------------------------------------
+
+// List events, optionally within an inclusive date range: ?from=YYYY-MM-DD&to=YYYY-MM-DD
+app.get('/api/events', (req, res) => {
+  const { from, to } = req.query;
+  let rows;
+  if (from && to) {
+    rows = db
+      .prepare('SELECT * FROM events WHERE date >= ? AND date <= ? ORDER BY date, start_time, id')
+      .all(from, to);
+  } else {
+    rows = db.prepare('SELECT * FROM events ORDER BY date, start_time, id').all();
+  }
+  res.json(rows);
+});
+
+app.post('/api/events', (req, res) => {
+  const { title, date, start_time, end_time, color, notes } = req.body || {};
+  if (!title || !title.trim()) return res.status(400).json({ error: 'title is required' });
+  if (!date) return res.status(400).json({ error: 'date is required' });
+  const info = db
+    .prepare(
+      `INSERT INTO events (title, date, start_time, end_time, color, notes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      title.trim(),
+      date,
+      start_time || null,
+      end_time || null,
+      color || '#6366f1',
+      notes || '',
+    );
+  res.status(201).json(db.prepare('SELECT * FROM events WHERE id = ?').get(info.lastInsertRowid));
+});
+
+app.patch('/api/events/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'event not found' });
+  const { title, date, start_time, end_time, color, notes } = req.body || {};
+  db.prepare(
+    `UPDATE events SET title = ?, date = ?, start_time = ?, end_time = ?, color = ?, notes = ?
+     WHERE id = ?`,
+  ).run(
+    title ?? existing.title,
+    date ?? existing.date,
+    start_time === undefined ? existing.start_time : start_time || null,
+    end_time === undefined ? existing.end_time : end_time || null,
+    color ?? existing.color,
+    notes ?? existing.notes,
+    req.params.id,
+  );
+  res.json(db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id));
+});
+
+app.delete('/api/events/:id', (req, res) => {
+  db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
+  res.status(204).end();
+});
+
 // --- AI weekly reflection --------------------------------------------------
 
 app.post(

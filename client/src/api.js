@@ -65,4 +65,11 @@ export const api = {
   getHabitDay: (date) => req(`/habits/day/${date}`),
   setHabitLog: (id, date, value) =>
     req(`/habits/${id}/log/${date}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+
+  // calendar events
+  getEvents: (from, to) =>
+    req(from && to ? `/events?from=${from}&to=${to}` : '/events'),
+  createEvent: (data) => req('/events', { method: 'POST', body: JSON.stringify(data) }),
+  updateEvent: (id, data) => req(`/events/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteEvent: (id) => req(`/events/${id}`, { method: 'DELETE' }),
 };

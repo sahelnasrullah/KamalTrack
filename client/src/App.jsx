@@ -1,15 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, NavLink, Link } from 'react-router-dom';
 import { api } from './api.js';
+import { useAuth } from './auth.jsx';
+import Login from './pages/Login.jsx';
 
 /**
- * App shell: brand header + the "due today" reminders banner that appears on
- * every page. The banner is the in-app reminder; if the user grants permission
- * we also fire a one-time browser notification per session.
+ * App shell: login gate (option A) + responsive sidebar.
+ * - Not "logged in" (no local name) -> Login screen.
+ * - Logged in -> sidebar nav (Dashboard, Daily Habits, Schedule) + page outlet.
+ * The "due today" reminders banner shows on every page.
  */
 export default function App() {
+  const { user, logout } = useAuth();
   const [due, setDue] = useState([]);
   const [notified, setNotified] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const loadDue = useCallback(async () => {
     try {
@@ -20,8 +25,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     loadDue();
-    // Re-check reminders when the user returns to the tab, and every 5 min.
     const onFocus = () => loadDue();
     window.addEventListener('focus', onFocus);
     const interval = setInterval(loadDue, 5 * 60 * 1000);
@@ -29,61 +34,104 @@ export default function App() {
       window.removeEventListener('focus', onFocus);
       clearInterval(interval);
     };
-  }, [loadDue]);
+  }, [user, loadDue]);
 
-  // Optional browser notification (only after permission + only once/session).
   useEffect(() => {
-    if (due.length === 0 || notified) return;
+    if (due.length === 0 || notified || !user) return;
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') {
-      const names = due.map((d) => d.name).join(', ');
       new Notification('KamalTrack — due today', {
-        body: `Don't forget to fill in: ${names}`,
+        body: `Don't forget to fill in: ${due.map((d) => d.name).join(', ')}`,
       });
       setNotified(true);
     }
-  }, [due, notified]);
+  }, [due, notified, user]);
 
   const enableNotifications = async () => {
     if (!('Notification' in window)) return;
     await Notification.requestPermission();
-    setNotified(false); // allow a notification to fire now that it's granted
+    setNotified(false);
   };
 
+  if (!user) return <Login />;
+
+  const navItems = [
+    { to: '/', label: 'Dashboard', icon: '🏠', end: true },
+    { to: '/habits', label: 'Daily Habits', icon: '✅' },
+    { to: '/schedule', label: 'Schedule', icon: '📅' },
+  ];
+
   return (
-    <div className="app-shell">
-      <div className="topbar">
-        <Link to="/" className="brand">
+    <div className="layout">
+      {/* Sidebar */}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <Link to="/" className="brand" onClick={() => setSidebarOpen(false)}>
           Kamal<span>Track</span>
         </Link>
-        <div className="nav-actions">
-          <Link to="/habits" className="nav-link">
-            ✅ Daily habits
+
+        <nav className="side-nav">
+          {navItems.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.end}
+              className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <span className="side-ico">{n.icon}</span>
+              {n.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="side-footer">
+          <div className="side-user">👤 {user.name}</div>
+          <button className="ghost" onClick={logout} style={{ width: '100%' }}>
+            Log out
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile overlay when sidebar open */}
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Main column */}
+      <div className="main">
+        <header className="mobile-bar">
+          <button className="ghost hamburger" onClick={() => setSidebarOpen((s) => !s)}>
+            ☰
+          </button>
+          <Link to="/" className="brand small">
+            Kamal<span>Track</span>
           </Link>
-          {'Notification' in window && Notification.permission !== 'granted' && (
-            <button className="ghost" onClick={enableNotifications}>
-              🔔 Enable reminders
-            </button>
+        </header>
+
+        <div className="content">
+          {due.length > 0 && (
+            <div className="banner">
+              <h3>⏰ Due today — don&apos;t forget to log:</h3>
+              <div>
+                {due.map((d) => (
+                  <Link key={d.id} to={`/tracker/${d.id}`} className="due-item">
+                    {d.area_icon} {d.name}
+                    {d.unit ? ` (${d.unit})` : ''}
+                  </Link>
+                ))}
+              </div>
+            </div>
           )}
+
+          {'Notification' in window && Notification.permission !== 'granted' && (
+            <div style={{ marginBottom: 16 }}>
+              <button className="ghost" onClick={enableNotifications}>
+                🔔 Enable reminders
+              </button>
+            </div>
+          )}
+
+          <Outlet context={{ refreshDue: loadDue }} />
         </div>
       </div>
-
-      {due.length > 0 && (
-        <div className="banner">
-          <h3>⏰ Due today — don&apos;t forget to log:</h3>
-          <div>
-            {due.map((d) => (
-              <Link key={d.id} to={`/tracker/${d.id}`} className="due-item">
-                {d.area_icon} {d.name}
-                {d.unit ? ` (${d.unit})` : ''}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Pages can trigger a reminders refresh via this context */}
-      <Outlet context={{ refreshDue: loadDue }} />
     </div>
   );
 }
