@@ -41,10 +41,16 @@ export const api = {
     req(`/trackers/${trackerId}/entries`, { method: 'POST', body: JSON.stringify(data) }),
   deleteEntry: (id) => req(`/entries/${id}`, { method: 'DELETE' }),
 
-  // items
+  // items (area-level = not tied to a tracker)
   getItems: (areaId) => req(`/areas/${areaId}/items`),
   createItem: (areaId, data) =>
     req(`/areas/${areaId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+
+  // items (tracker-level)
+  getTrackerItems: (trackerId) => req(`/trackers/${trackerId}/items`),
+  createTrackerItem: (trackerId, data) =>
+    req(`/trackers/${trackerId}/items`, { method: 'POST', body: JSON.stringify(data) }),
+
   updateItem: (id, data) => req(`/items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteItem: (id) => req(`/items/${id}`, { method: 'DELETE' }),
 

@@ -43,9 +43,12 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS items (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     area_id    INTEGER NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    tracker_id INTEGER REFERENCES trackers(id) ON DELETE CASCADE, -- optional: item scoped to a tracker
     type       TEXT NOT NULL DEFAULT 'goal',   -- goal | task | note
     content    TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'open',   -- open | done
+    target_value     REAL,                      -- goal only: numeric target
+    target_direction TEXT NOT NULL DEFAULT 'at_least', -- at_least | at_most
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -53,5 +56,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_entries_tracker ON entries(tracker_id);
   CREATE INDEX IF NOT EXISTS idx_items_area ON items(area_id);
 `);
+
+// --- lightweight migrations for pre-existing databases ---------------------
+// CREATE TABLE IF NOT EXISTS won't alter an existing items table, so add any
+// missing columns here. Safe to run on every boot.
+const itemCols = db.prepare(`PRAGMA table_info(items)`).all().map((c) => c.name);
+if (!itemCols.includes('tracker_id')) {
+  db.exec(`ALTER TABLE items ADD COLUMN tracker_id INTEGER REFERENCES trackers(id) ON DELETE CASCADE`);
+}
+if (!itemCols.includes('target_value')) {
+  db.exec(`ALTER TABLE items ADD COLUMN target_value REAL`);
+}
+if (!itemCols.includes('target_direction')) {
+  db.exec(`ALTER TABLE items ADD COLUMN target_direction TEXT NOT NULL DEFAULT 'at_least'`);
+}
+
+// Index on tracker_id must come after the column exists (migration above).
+db.exec(`CREATE INDEX IF NOT EXISTS idx_items_tracker ON items(tracker_id)`);
 
 export default db;

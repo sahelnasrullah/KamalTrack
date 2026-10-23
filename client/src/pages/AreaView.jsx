@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../api.js';
+import ItemList, { ItemScope } from '../components/ItemList.jsx';
 
 const DOW = [
   { v: 1, label: 'Monday' },
@@ -25,10 +26,6 @@ export default function AreaView() {
   const [tUnit, setTUnit] = useState('');
   const [tFreq, setTFreq] = useState('weekly');
   const [tDow, setTDow] = useState(1);
-
-  // item form
-  const [iContent, setIContent] = useState('');
-  const [iType, setIType] = useState('goal');
 
   const load = useCallback(async () => {
     const areas = await api.getAreas();
@@ -58,27 +55,6 @@ export default function AreaView() {
     } catch (err) {
       setError(err.message);
     }
-  };
-
-  const addItem = async (e) => {
-    e.preventDefault();
-    try {
-      await api.createItem(areaId, { type: iType, content: iContent });
-      setIContent('');
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const toggleItem = async (it) => {
-    await api.updateItem(it.id, { status: it.status === 'done' ? 'open' : 'done' });
-    await load();
-  };
-
-  const removeItem = async (id) => {
-    await api.deleteItem(id);
-    await load();
   };
 
   const removeTracker = async (e, id) => {
@@ -180,41 +156,13 @@ export default function AreaView() {
       </div>
 
       <div className="section">
-        <h2>Goals &amp; notes</h2>
-        {items.length === 0 ? (
-          <div className="empty">No goals or notes yet.</div>
-        ) : (
-          items.map((it) => (
-            <div key={it.id} className={`item-row ${it.status === 'done' ? 'done' : ''}`}>
-              <input
-                type="checkbox"
-                style={{ width: 'auto' }}
-                checked={it.status === 'done'}
-                onChange={() => toggleItem(it)}
-              />
-              <span className="badge">{it.type}</span>
-              <span className="item-text">{it.content}</span>
-              <button className="danger" onClick={() => removeItem(it.id)}>
-                delete
-              </button>
-            </div>
-          ))
-        )}
-        <form className="row" onSubmit={addItem} style={{ marginTop: 12 }}>
-          <select value={iType} onChange={(e) => setIType(e.target.value)} style={{ flex: '0 0 120px' }}>
-            <option value="goal">Goal</option>
-            <option value="task">Task</option>
-            <option value="note">Note</option>
-          </select>
-          <input
-            value={iContent}
-            onChange={(e) => setIContent(e.target.value)}
-            placeholder="Add a goal, task, or note…"
-          />
-          <button type="submit" disabled={!iContent.trim()} style={{ flex: '0 0 auto' }}>
-            Add
-          </button>
-        </form>
+        <h2>Goals, tasks &amp; notes</h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          For this whole area. Add tracker-specific ones inside each tracker.
+        </p>
+        <ItemScope areaId={areaId}>
+          <ItemList items={items} onChange={load} />
+        </ItemScope>
       </div>
     </div>
   );

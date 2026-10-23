@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { api } from '../api.js';
+import ItemList, { ItemScope } from '../components/ItemList.jsx';
 
 export default function TrackerView() {
   const { trackerId } = useParams();
@@ -18,15 +19,21 @@ export default function TrackerView() {
 
   const [tracker, setTracker] = useState(null);
   const [entries, setEntries] = useState([]);
+  const [items, setItems] = useState([]);
   const [value, setValue] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const loadItems = useCallback(async () => {
+    setItems(await api.getTrackerItems(trackerId));
+  }, [trackerId]);
+
   const load = useCallback(async () => {
     setTracker(await api.getTracker(trackerId));
     setEntries(await api.getEntries(trackerId));
-  }, [trackerId]);
+    await loadItems();
+  }, [trackerId, loadItems]);
 
   useEffect(() => {
     load().catch((e) => setError(e.message));
@@ -186,6 +193,16 @@ export default function TrackerView() {
           </button>
           {error && <div className="error">{error}</div>}
         </form>
+      </div>
+
+      <div className="section">
+        <h2>Goals, tasks &amp; notes for this tracker</h2>
+        <p className="muted" style={{ marginTop: -6 }}>
+          Set a goal with a target value to see a live progress bar based on your latest entry.
+        </p>
+        <ItemScope trackerId={trackerId}>
+          <ItemList items={items} onChange={load} allowTarget unit={tracker.unit} />
+        </ItemScope>
       </div>
 
       {entries.length > 0 && (
