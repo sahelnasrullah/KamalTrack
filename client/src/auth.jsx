@@ -1,33 +1,96 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
 /**
- * Local-only "auth" (option A): there are no real accounts or passwords.
- * We just store a display name in localStorage to gate the UI and personalize
- * it. This is a presentation layer only — swap for real auth before any
- * public/multi-user deployment.
+ * Real token-based auth against the backend.
+ * - token is stored in localStorage (remember me) or sessionStorage (session only)
+ * - on load, we validate the token via /api/auth/me
+ * The token is attached to every API request by api.js (which reads getToken()).
  */
-const KEY = 'kamaltrack.user';
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(KEY)) || null;
-    } catch {
-      return null;
-    }
+const LS_KEY = 'kamaltrack.token';
+
+// Token accessor shared with api.js (set via module-level store).
+let currentToken = null;
+export function getToken() {
+  if (currentToken) return currentToken;
+  return localStorage.getItem(LS_KEY) || sessionStorage.getItem(LS_KEY) || null;
+}
+function storeToken(token, remember) {
+  currentToken = token;
+  if (remember) {
+    localStorage.setItem(LS_KEY, token);
+    sessionStorage.removeItem(LS_KEY);
+  } else {
+    sessionStorage.setItem(LS_KEY, token);
+    localStorage.removeItem(LS_KEY);
+  }
+}
+function clearToken() {
+  currentToken = null;
+  localStorage.removeItem(LS_KEY);
+  sessionStorage.removeItem(LS_KEY);
+}
+
+async function apiAuth(path, body) {
+  const res = await fetch(`/api/auth/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
 
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Bootstrap: if we have a token, fetch the current user to confirm it's valid.
   useEffect(() => {
-    if (user) localStorage.setItem(KEY, JSON.stringify(user));
-    else localStorage.removeItem(KEY);
-  }, [user]);
+    const token = getToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    currentToken = token;
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setUser(d.user))
+      .catch(() => clearToken())
+      .finally(() => setLoading(false));
+  }, []);
 
-  const login = (name) => setUser({ name: name.trim(), since: Date.now() });
-  const logout = () => setUser(null);
+  const signup = useCallback(async ({ email, password, name }) => {
+    const { token, user: u } = await apiAuth('signup', { email, password, name });
+    storeToken(token, true);
+    setUser(u);
+  }, []);
+
+  const login = useCallback(async ({ email, password, remember }) => {
+    const { token, user: u } = await apiAuth('login', { email, password, remember });
+    storeToken(token, remember);
+    setUser(u);
+  }, []);
+
+  const logout = useCallback(() => {
+    clearToken();
+    setUser(null);
+  }, []);
+
+  const requestReset = useCallback((email) => apiAuth('reset/request', { email }), []);
+  const confirmReset = useCallback(
+    (token, password) => apiAuth('reset/confirm', { token, password }),
+    [],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{ user, loading, signup, login, logout, requestReset, confirmReset }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 }
 

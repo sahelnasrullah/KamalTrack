@@ -5,13 +5,14 @@ import { useAuth } from './auth.jsx';
 import Login from './pages/Login.jsx';
 
 /**
- * App shell: login gate (option A) + responsive sidebar.
- * - Not "logged in" (no local name) -> Login screen.
- * - Logged in -> sidebar nav (Dashboard, Daily Habits, Schedule) + page outlet.
+ * App shell: auth gate + responsive sidebar.
+ * - While validating a stored token -> brief loading state.
+ * - Not authenticated -> Login screen (signup/login/reset).
+ * - Authenticated -> sidebar nav (Dashboard, Daily Habits, Schedule) + page outlet.
  * The "due today" reminders banner shows on every page.
  */
 export default function App() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [due, setDue] = useState([]);
   const [notified, setNotified] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -52,6 +53,16 @@ export default function App() {
     await Notification.requestPermission();
     setNotified(false);
   };
+
+  if (loading) {
+    return (
+      <div className="login-screen">
+        <div className="login-brand">
+          Kamal<span>Track</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) return <Login />;
 

@@ -1,11 +1,15 @@
 // Thin wrapper around fetch for the KamalTrack API.
 // In dev, Vite proxies /api -> http://localhost:3001 (see vite.config.js).
+import { getToken } from './auth.jsx';
 
 async function req(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(`/api${path}`, { ...options, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
