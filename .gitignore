@@ -37,3 +37,8 @@ logs/
 
 # Vite cache
 .vite/
+
+# Personal tracking data (not part of the app)
+*.xlsx
+*.xls
+*.ods
